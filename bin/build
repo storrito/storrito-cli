@@ -225,7 +225,8 @@
     (when (:version opts)
       (write-version! (:version opts))
       (println "Version set to" (:version opts)))
-    (let [version (read-version)
+    (let [version (or (read-version)
+                      (throw (ex-info (str "No version found in " version-file) {})))
           platforms* (str/split (:platforms opts) #",")
           unknown (remove #(contains? platforms %) platforms*)]
       (when (seq unknown)
