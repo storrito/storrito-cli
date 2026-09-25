@@ -73,7 +73,8 @@
   "src/storrito/cli/version.clj")
 
 (def version-pattern
-  #"\(def version\n  \"([^\"]+)\"\)")
+  ;; CRLF-tolerant: a checkout with autocrlf must still find the version.
+  #"\(def version\r?\n  \"([^\"]+)\"\)")
 
 (defn read-version
   []

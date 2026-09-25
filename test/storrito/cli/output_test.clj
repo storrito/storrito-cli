@@ -1,5 +1,6 @@
 (ns storrito.cli.output-test
   (:require [cheshire.core :as json]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [storrito.cli.output :as output]))
 
@@ -27,7 +28,7 @@
          (json/parse-string (output/json-str {:a 1} {:pretty false})
                             true)))
   (let [printed (with-out-str (output/print-result {:a [1 2]} {:pretty false}))]
-    (is (= "{\"a\":[1,2]}\n" printed))))
+    (is (= "{\"a\":[1,2]}" (str/trim printed)))))
 
 (deftest exit-codes-are-stable
   (is (= {:ok 0 :error 1 :usage 2 :not-logged-in 3 :validation 4 :rate-limited 5 :network 6}

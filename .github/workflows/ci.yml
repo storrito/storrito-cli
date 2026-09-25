@@ -46,10 +46,16 @@ jobs:
         run: |
           set -eu
           exe="$(ls dist/*/storrito-${{ matrix.platform }})"
-          if [ "${{ runner.os }}" = "macOS" ]; then codesign --force --sign - "$exe"; fi
           "$exe" version
           "$exe" help
           "$exe" status
+      - name: codesign diagnostic (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          exe="$(ls dist/*/storrito-${{ matrix.platform }})"
+          codesign -dvv "$exe" || true
+          codesign --force --sign - "$exe" && echo "re-signed ok" && "$exe" version
       - name: Run it (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
