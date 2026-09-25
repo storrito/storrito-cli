@@ -39,7 +39,10 @@ irm https://storrito.com/install.ps1 | iex
 The CLI is written in Clojure and runs on [babashka](https://babashka.org).
 A release is the babashka runtime with this project's jar appended
 (`cat bb storrito.jar > storrito`): one self-contained executable per
-platform, and the code you run is the code in this repository.
+platform, and the code you run is the code in this repository. The
+runtime's ad-hoc code signature stays valid with the jar appended, so
+Apple Silicon runs it; CI builds and runs the executable on Linux,
+macOS ARM and Windows.
 
 Commands are derived at runtime from the API catalog
 (`https://storrito.com/documentation/api/v1/catalog.json`): one command

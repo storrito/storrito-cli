@@ -8,9 +8,11 @@
 # STORRITO_INSTALL_DIR chooses the directory, STORRITO_DOWNLOADS_URL points
 # to another download host (tests). Windows: irm https://storrito.com/install.ps1 | iex
 #
-# The executable is the babashka runtime with the CLI's jar appended; on
-# macOS it gets an ad-hoc code signature after the download, since Apple
-# Silicon runs signed executables only. Docs: https://storrito.com/documentation/cli/
+# The executable is the babashka runtime with the CLI's jar appended. The
+# runtime's own ad-hoc code signature stays valid on Apple Silicon (the
+# appended jar lies outside the signed pages), and `codesign` refuses to
+# re-sign such a file, so nothing is signed here.
+# Docs: https://storrito.com/documentation/cli/
 set -eu
 
 BASE="${STORRITO_DOWNLOADS_URL:-https://storrito.com/downloads/cli}"
@@ -71,9 +73,6 @@ fi
 [ "$expected" = "$actual" ] || fail "checksum mismatch for $url (expected $expected, got $actual)"
 
 chmod +x "$tmp/storrito"
-if [ "$platform_os" = "macos" ] && command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - "$tmp/storrito" 2>/dev/null || say "warning: ad-hoc code signing failed"
-fi
 
 mkdir -p "$INSTALL_DIR"
 mv -f "$tmp/storrito" "$INSTALL_DIR/storrito"

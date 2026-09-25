@@ -35,9 +35,10 @@
 ;; bucket (cli/install.sh, cli/install.ps1), which storrito.com serves as
 ;; /install.sh and /install.ps1.
 ;;
-;; macOS executables get an ad-hoc signature when `rcodesign` is installed
-;; (cargo install apple-codesign); install.sh signs them again on the Mac
-;; anyway, Apple Silicon runs signed executables only.
+;; No code signing: the babashka runtime carries its own ad-hoc signature,
+;; which stays valid with the jar appended (Apple Silicon runs it, verified
+;; in CI), and `codesign` refuses to re-sign a file with appended data
+;; ("main executable failed strict validation").
 
 (require '[babashka.cli :as cli]
          '[babashka.fs :as fs]
@@ -56,8 +57,8 @@
   "Platform name -> the babashka release asset and the binary inside it."
   {"linux-amd64" {:asset "linux-amd64-static.tar.gz" :bin "bb"}
    "linux-aarch64" {:asset "linux-aarch64-static.tar.gz" :bin "bb"}
-   "macos-amd64" {:asset "macos-amd64.tar.gz" :bin "bb" :sign? true}
-   "macos-aarch64" {:asset "macos-aarch64.tar.gz" :bin "bb" :sign? true}
+   "macos-amd64" {:asset "macos-amd64.tar.gz" :bin "bb"}
+   "macos-aarch64" {:asset "macos-aarch64.tar.gz" :bin "bb"}
    "windows-amd64" {:asset "windows-amd64.zip" :bin "bb.exe" :suffix ".exe"}})
 
 (def downloads-url
@@ -145,7 +146,7 @@
 (defn build-executable!
   "The self-contained executable of `platform` in `dist`."
   [{:keys [version bb-version dist jar]} platform]
-  (let [{:keys [suffix sign?]} (get platforms platform)
+  (let [{:keys [suffix]} (get platforms platform)
         file (str "storrito-" platform suffix)
         exe (fs/path dist file)]
     (println "Building" file)
@@ -155,10 +156,6 @@
       (catch UnsupportedOperationException _
         ;; Building on Windows: no POSIX permissions, the exe runs anyway.
         nil))
-    (when sign?
-      (if (fs/which "rcodesign")
-        (process/shell "rcodesign" "sign" (str exe))
-        (println "  rcodesign not installed, install.sh signs the executable on the Mac")))
     (let [digest (sha256 exe)]
       (spit (fs/file (fs/path dist (str file ".sha256")))
             (str digest "  " file "\n"))

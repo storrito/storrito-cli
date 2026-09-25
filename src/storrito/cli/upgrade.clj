@@ -4,8 +4,8 @@
 
    `latest.json` names the version and, per platform, the URL, sha256
    and size of the executable. The new file is downloaded next to the
-   running one, verified, made executable (and ad-hoc signed on macOS),
-   then moved into place: an atomic rename on Unix, where the running
+   running one, verified, made executable, then moved into place: an
+   atomic rename on Unix, where the running
    process keeps its old inode; on Windows the running exe is renamed
    to `storrito.old.exe` first, which is deleted on the next start.
 
@@ -13,7 +13,6 @@
    a one-line hint on stderr when a newer version exists. Never installs
    on its own."
   (:require [babashka.fs :as fs]
-            [babashka.process :as process]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [storrito.cli.config :as config]
@@ -108,11 +107,6 @@
     (with-open [in (:body response)]
       (io/copy in (fs/file dest)))))
 
-(defn macos?
-  []
-  (str/includes? (str/lower-case (System/getProperty "os.name" ""))
-                 "mac"))
-
 (defn old-executable-path
   [exe-path]
   (str (fs/path (fs/parent exe-path)
@@ -141,12 +135,6 @@
       (fs/move new-file exe-path))
     (do
       (fs/set-posix-file-permissions new-file "rwxr-xr-x")
-      (when (and (macos?)
-                 (fs/which "codesign"))
-        (process/shell {:continue true
-                        :out :discard
-                        :err :discard}
-                       "codesign" "--force" "--sign" "-" (str new-file)))
       (fs/move new-file exe-path {:replace-existing true
                                   :atomic-move true}))))
 
