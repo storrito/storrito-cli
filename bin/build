@@ -1,0 +1,240 @@
+#!/usr/bin/env bb
+
+;; =============================================================================
+;; build - Builds and publishes the Storrito CLI executables
+;; =============================================================================
+;;
+;; Runs the CLI's tests, builds its jar, downloads the pinned babashka
+;; release for every platform (cached under ~/.cache/storrito-cli/bb/), and
+;; concatenates runtime + jar into one self-contained executable per
+;; platform (`cat bb storrito.jar > storrito`, babashka runs the appended
+;; jar's -main when its executable is not named bb). Writes sha256 files and
+;; the manifest, and uploads everything to the public Tigris bucket
+;; storrito-downloads that storrito.com/downloads/cli/ serves.
+;;
+;; USAGE:
+;;   bin/build [OPTIONS]
+;;
+;; OPTIONS:
+;;   --version X.Y.Z      Set the CLI version (writes version.clj) before building
+;;   --bb-version V       The babashka release to embed (default: pinned below)
+;;   --platforms a,b      Only these platforms (default: all five)
+;;   --skip-tests         Do not run `bb test` first
+;;   --upload             Upload dist/<version> and the manifest to Tigris
+;;                        (needs the tigris CLI logged in to the Storrito account)
+;;
+;; EXAMPLES:
+;;   bin/build --platforms linux-amd64            # a local build to try out
+;;   bin/build --version 0.2.0 --upload           # a release
+;;
+;; OUTPUT:
+;;   dist/<version>/storrito-<platform>[.exe] (+ .sha256)
+;;   dist/<version>/latest.json and latest.txt
+;;
+;; --upload also uploads scripts/install.sh and scripts/install.ps1 to the
+;; bucket (cli/install.sh, cli/install.ps1), which storrito.com serves as
+;; /install.sh and /install.ps1.
+;;
+;; macOS executables get an ad-hoc signature when `rcodesign` is installed
+;; (cargo install apple-codesign); install.sh signs them again on the Mac
+;; anyway, Apple Silicon runs signed executables only.
+
+(require '[babashka.cli :as cli]
+         '[babashka.fs :as fs]
+         '[babashka.http-client :as http]
+         '[babashka.process :as process]
+         '[cheshire.core :as json]
+         '[clojure.java.io :as io]
+         '[clojure.string :as str])
+
+(def pinned-bb-version
+  "The babashka release embedded into the executables. Bump deliberately:
+   bb's own changelog at https://github.com/babashka/babashka/blob/master/CHANGELOG.md"
+  "1.13.224")
+
+(def platforms
+  "Platform name -> the babashka release asset and the binary inside it."
+  {"linux-amd64" {:asset "linux-amd64-static.tar.gz" :bin "bb"}
+   "linux-aarch64" {:asset "linux-aarch64-static.tar.gz" :bin "bb"}
+   "macos-amd64" {:asset "macos-amd64.tar.gz" :bin "bb" :sign? true}
+   "macos-aarch64" {:asset "macos-aarch64.tar.gz" :bin "bb" :sign? true}
+   "windows-amd64" {:asset "windows-amd64.zip" :bin "bb.exe" :suffix ".exe"}})
+
+(def downloads-url
+  "https://storrito.com/downloads/cli")
+
+(def bucket
+  "t3://storrito-downloads/cli")
+
+(def cli-dir
+  ".")
+
+(def version-file
+  "src/storrito/cli/version.clj")
+
+(def version-pattern
+  #"\(def version\n  \"([^\"]+)\"\)")
+
+(defn read-version
+  []
+  (second (re-find version-pattern (slurp version-file))))
+
+(defn write-version!
+  [version]
+  (spit version-file
+        (str/replace (slurp version-file)
+                     version-pattern
+                     (str "(def version\n  \"" version "\")"))))
+
+(defn sha256
+  [path]
+  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
+    (with-open [in (io/input-stream (fs/file path))]
+      (let [buffer (byte-array 65536)]
+        (loop []
+          (let [n (.read in buffer)]
+            (when (pos? n)
+              (.update digest buffer 0 n)
+              (recur))))))
+    (str/join (map #(format "%02x" %) (.digest digest)))))
+
+(defn download!
+  [url dest]
+  (println "Downloading" url)
+  (let [response (http/get url {:as :stream :throw false})]
+    (when-not (= 200 (:status response))
+      (throw (ex-info (str "Download failed: HTTP " (:status response) " " url) {})))
+    (with-open [in (:body response)]
+      (io/copy in (fs/file dest)))))
+
+(defn bb-cache-dir
+  [bb-version]
+  (fs/path (fs/home) ".cache" "storrito-cli" "bb" bb-version))
+
+(defn bb-binary!
+  "The babashka binary of the release for `platform`, downloaded into the
+   cache and verified against the release's sha256 file."
+  [bb-version platform]
+  (let [{:keys [asset bin]} (get platforms platform)
+        dir (fs/path (bb-cache-dir bb-version) platform)
+        asset-name (str "babashka-" bb-version "-" asset)
+        asset-path (fs/path dir asset-name)
+        binary (fs/path dir bin)
+        base (str "https://github.com/babashka/babashka/releases/download/v" bb-version "/")]
+    (fs/create-dirs dir)
+    (when-not (fs/exists? binary)
+      (download! (str base asset-name) asset-path)
+      (let [expected (str/trim (str (:body (http/get (str base asset-name ".sha256")))))
+            actual (sha256 asset-path)]
+        (when-not (= expected actual)
+          (fs/delete asset-path)
+          (throw (ex-info (str "Checksum mismatch for " asset-name) {:expected expected :actual actual}))))
+      (if (str/ends-with? asset-name ".zip")
+        (fs/unzip asset-path dir {:replace-existing true})
+        (process/shell {:dir (str dir)} "tar" "xzf" (str asset-path) bin)))
+    binary))
+
+(defn concat-files!
+  [dest & sources]
+  (with-open [out (io/output-stream (fs/file dest))]
+    (doseq [source sources]
+      (with-open [in (io/input-stream (fs/file source))]
+        (io/copy in out)))))
+
+(defn build-executable!
+  "The self-contained executable of `platform` in `dist`."
+  [{:keys [version bb-version dist jar]} platform]
+  (let [{:keys [suffix sign?]} (get platforms platform)
+        file (str "storrito-" platform suffix)
+        exe (fs/path dist file)]
+    (println "Building" file)
+    (concat-files! exe (bb-binary! bb-version platform) jar)
+    (try
+      (fs/set-posix-file-permissions exe "rwxr-xr-x")
+      (catch UnsupportedOperationException _
+        ;; Building on Windows: no POSIX permissions, the exe runs anyway.
+        nil))
+    (when sign?
+      (if (fs/which "rcodesign")
+        (process/shell "rcodesign" "sign" (str exe))
+        (println "  rcodesign not installed, install.sh signs the executable on the Mac")))
+    (let [digest (sha256 exe)]
+      (spit (fs/file (fs/path dist (str file ".sha256")))
+            (str digest "  " file "\n"))
+      {:url (str downloads-url "/" version "/" file)
+       :sha256 digest
+       :size (fs/size exe)})))
+
+(defn build!
+  [{:keys [version bb-version platforms* skip-tests]}]
+  (when-not skip-tests
+    (println "Running the CLI tests")
+    (process/shell {:dir cli-dir} "bb" "test"))
+  (println "Building the jar")
+  (process/shell {:dir cli-dir} "bb" "jar")
+  (let [dist (fs/path cli-dir "dist" version)
+        ctx {:version version
+             :bb-version bb-version
+             :dist dist
+             :jar (fs/path cli-dir "target" "storrito.jar")}]
+    (fs/create-dirs dist)
+    (let [files (into (sorted-map)
+                      (map (fn [platform]
+                             [platform (build-executable! ctx platform)]))
+                      platforms*)
+          manifest {:version version
+                    :bbVersion bb-version
+                    :publishedAt (str (java.time.Instant/now))
+                    :files files}]
+      (spit (fs/file (fs/path dist "latest.json"))
+            (json/generate-string manifest {:pretty true}))
+      (spit (fs/file (fs/path dist "latest.txt"))
+            (str version "\n"))
+      (println "Built" (str dist))
+      dist)))
+
+(defn upload!
+  "Uploads the version directory, then the manifest, so that a client
+   never sees a manifest whose files are missing."
+  [dist version]
+  (println "Uploading to" bucket)
+  (doseq [file (fs/list-dir dist)
+          :when (not (contains? #{"latest.json" "latest.txt"} (fs/file-name file)))]
+    (process/shell "tigris" "cp" (str file) (str bucket "/" version "/" (fs/file-name file))))
+  (process/shell "tigris" "cp" (str (fs/path dist "latest.json")) (str bucket "/latest.json"))
+  (process/shell "tigris" "cp" (str (fs/path dist "latest.txt")) (str bucket "/latest.txt"))
+  (process/shell "tigris" "cp" "scripts/install.sh" (str bucket "/install.sh"))
+  (process/shell "tigris" "cp" "scripts/install.ps1" (str bucket "/install.ps1"))
+  (println "Published" version "at" downloads-url))
+
+(def cli-spec
+  {:version {:desc "Set the CLI version before building"}
+   :bb-version {:desc "The babashka release to embed" :default pinned-bb-version}
+   :platforms {:desc "Comma-separated platforms" :default (str/join "," (keys platforms))}
+   :skip-tests {:desc "Skip bb test" :coerce :boolean}
+   :upload {:desc "Upload to Tigris" :coerce :boolean}
+   :help {:coerce :boolean}})
+
+(defn -main
+  [& args]
+  (let [opts (cli/parse-opts args {:spec cli-spec})]
+    (when (:help opts)
+      (println (cli/format-opts {:spec cli-spec}))
+      (System/exit 0))
+    (when (:version opts)
+      (write-version! (:version opts))
+      (println "Version set to" (:version opts)))
+    (let [version (read-version)
+          platforms* (str/split (:platforms opts) #",")
+          unknown (remove #(contains? platforms %) platforms*)]
+      (when (seq unknown)
+        (throw (ex-info (str "Unknown platforms: " (str/join ", " unknown)) {})))
+      (let [dist (build! {:version version
+                          :bb-version (:bb-version opts)
+                          :platforms* platforms*
+                          :skip-tests (:skip-tests opts)})]
+        (when (:upload opts)
+          (upload! dist version))))))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply -main *command-line-args*))

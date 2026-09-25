@@ -1,0 +1,29 @@
+{:paths ["src"]
+ :min-bb-version "1.12.200"
+ :tasks
+ {:requires ([babashka.fs :as fs])
+
+  test {:doc "Runs the unit tests (fake API and WorkOS servers, no network)."
+        :extra-paths ["test"]
+        :requires ([clojure.test :as t])
+        :task (let [namespaces '[storrito.cli.config-test
+                                 storrito.cli.output-test
+                                 storrito.cli.http-test
+                                 storrito.cli.workos-test
+                                 storrito.cli.auth-test
+                                 storrito.cli.catalog-test
+                                 storrito.cli.commands-test
+                                 storrito.cli.upgrade-test
+                                 storrito.cli.main-test]]
+                (doseq [n namespaces]
+                  (require n))
+                (let [{:keys [fail error]} (apply t/run-tests namespaces)]
+                  (when (pos? (+ fail error))
+                    (System/exit 1))))}
+
+  jar {:doc "Builds target/storrito.jar, the payload of the self-contained executable."
+       :task (do (fs/create-dirs "target")
+                 (shell "bb uberjar target/storrito.jar -m storrito.cli.main"))}
+
+  cli {:doc "Runs the CLI from source: bb cli <args>"
+       :task (apply shell "bb -m storrito.cli.main" *command-line-args*)}}}

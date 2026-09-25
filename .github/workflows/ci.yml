@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: bb test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.13.224
+      - run: bb test
+
+  executable:
+    name: executable (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - os: macos-latest
+            platform: macos-aarch64
+          - os: windows-latest
+            platform: windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.13.224
+      - name: Build the self-contained executable
+        run: bb bin/build --platforms ${{ matrix.platform }} --skip-tests
+      - name: Run it (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          set -eu
+          exe="$(ls dist/*/storrito-${{ matrix.platform }})"
+          if [ "${{ runner.os }}" = "macOS" ]; then codesign --force --sign - "$exe"; fi
+          "$exe" version
+          "$exe" help
+          "$exe" status
+      - name: Run it (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem dist\*\storrito-windows-amd64.exe).FullName
+          & $exe version
+          if ($LASTEXITCODE -ne 0) { throw "version failed" }
+          & $exe help
+          & $exe status
+          if ($LASTEXITCODE -ne 0) { throw "status failed" }
+      - name: install.sh against the built release
+        if: runner.os != 'Windows'
+        run: |
+          set -eu
+          cp dist/*/latest.txt dist/latest.txt
+          (cd dist && python3 -m http.server 18477 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          sleep 2
+          STORRITO_DOWNLOADS_URL=http://127.0.0.1:18477 STORRITO_INSTALL_DIR="$HOME/storrito-bin" sh scripts/install.sh
+          "$HOME/storrito-bin/storrito" version
+      - name: install.ps1 against the built release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item (Get-ChildItem dist\*\latest.txt).FullName dist\latest.txt
+          $server = Start-Process python -ArgumentList '-m','http.server','18477','--bind','127.0.0.1' -WorkingDirectory dist -PassThru
+          Start-Sleep -Seconds 3
+          $env:STORRITO_DOWNLOADS_URL = 'http://127.0.0.1:18477'
+          $env:STORRITO_INSTALL_DIR = Join-Path $env:USERPROFILE 'storrito-bin'
+          Invoke-Expression (Get-Content scripts\install.ps1 -Raw)
+          & (Join-Path $env:STORRITO_INSTALL_DIR 'storrito.exe') version
+          if ($LASTEXITCODE -ne 0) { throw "installed exe failed" }
+          Stop-Process -Id $server.Id
