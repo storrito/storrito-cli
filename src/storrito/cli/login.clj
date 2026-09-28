@@ -81,7 +81,12 @@
         (config/write-credentials! (config/put-org-entry (config/read-credentials)
                                                          org-uuid
                                                          entry)))
-      (catalog/catalog {:refresh true})
+      ;; Warm the catalog cache, best effort: the login is stored either
+      ;; way, and the first command fetches the catalog on its own.
+      (try
+        (catalog/catalog {:refresh true})
+        (catch Exception _
+          nil))
       {:loggedIn true
        :org org-uuid
        :kind "workos"
