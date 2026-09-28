@@ -35,6 +35,20 @@ irm https://storrito.com/install.ps1 | iex
 `storrito upgrade` updates the installed executable. Releases:
 https://github.com/storrito/storrito-cli/releases
 
+## Claude Code
+
+```
+storrito setup claude
+```
+
+Installs the Storrito skill (`resources/storrito/SKILL.md`, shipped in
+the executable) into `~/.claude/skills/storrito/` and signs you in when
+no login is stored. From then on Claude Code knows when and how to use
+the CLI, for example "create a Storrito draft from story.html". The
+skill is refreshed by `storrito upgrade`; `--skill-only` skips the
+login, `--print` shows the skill, `--force` replaces a skill file the
+CLI did not write.
+
 ## How it works
 
 The CLI is written in Clojure and runs on [babashka](https://babashka.org).

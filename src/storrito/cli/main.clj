@@ -15,13 +15,14 @@
             [storrito.cli.config :as config]
             [storrito.cli.login :as login]
             [storrito.cli.output :as output]
+            [storrito.cli.setup :as setup]
             [storrito.cli.upgrade :as upgrade]
             [storrito.cli.upload :as upload]
             [storrito.cli.version :as version]))
 
 (def boolean-flags
   "Flags that never take a value."
-  #{"help" "compact" "refresh" "no-browser" "all" "version" "debug" "force"})
+  #{"help" "compact" "refresh" "no-browser" "all" "version" "debug" "force" "skill-only" "print"})
 
 (defn api-context
   "The organization, token, catalog and base URL for a command that
@@ -156,6 +157,12 @@
    {:name "upgrade"
     :doc "Replaces this executable with the latest release (--force reinstalls)."
     :run upgrade/upgrade}
+   {:name "setup"
+    :doc "setup claude: installs the Storrito skill for Claude Code and checks the login."
+    :run (fn [ctx]
+           (setup/setup ctx
+                        {:login-fn (fn [{:keys [flags]}]
+                                     (login/login {:no-browser (get flags "no-browser")}))}))}
    {:name "help"
     :doc "This help. `storrito <command> --help` explains a command."
     :run nil}])
@@ -209,7 +216,7 @@
 
 (def no-update-hint
   "Commands after which the update hint makes no sense."
-  #{"upgrade" "version" "help" "doctor"})
+  #{"upgrade" "version" "help" "doctor" "setup"})
 
 (defn maybe-update-hint!
   "The passive update check, only for a human in a terminal, never for
@@ -232,6 +239,7 @@
                     (output/tty?))]
     (some-> (upgrade/executable-path)
             (upgrade/cleanup-old-executable!))
+    (setup/refresh-managed-skill!)
     (try
       (let [result (dispatch ctx)]
         (if (string? result)

@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
  :min-bb-version "1.12.200"
  :tasks
  {:requires ([babashka.fs :as fs])
@@ -14,6 +14,7 @@
                                  storrito.cli.catalog-test
                                  storrito.cli.commands-test
                                  storrito.cli.upgrade-test
+                                 storrito.cli.setup-test
                                  storrito.cli.main-test]]
                 (doseq [n namespaces]
                   (require n))
