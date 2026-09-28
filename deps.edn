@@ -1,0 +1,5 @@
+;; Not for building the CLI (that is bb.edn); for consumers on the JVM.
+;; The storrito.com website depends on this repo as a git dependency to
+;; serve scripts/install.sh and scripts/install.ps1 from its classpath,
+;; so the install scripts have a single source.
+{:paths ["src" "scripts"]}

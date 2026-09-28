@@ -4,9 +4,10 @@
 #     curl -fsSL https://storrito.com/install.sh | sh
 #
 # Puts the `storrito` executable into ~/.local/bin (or $STORRITO_INSTALL_DIR).
-# Environment variables: STORRITO_CLI_VERSION pins a version,
+# Releases come from https://github.com/storrito/storrito-cli/releases.
+# Environment variables: STORRITO_CLI_VERSION pins a version (e.g. 0.2.0),
 # STORRITO_INSTALL_DIR chooses the directory, STORRITO_DOWNLOADS_URL points
-# to another download host (tests). Windows: irm https://storrito.com/install.ps1 | iex
+# to another releases base URL (tests). Windows: irm https://storrito.com/install.ps1 | iex
 #
 # The executable is the babashka runtime with the CLI's jar appended. The
 # runtime's own ad-hoc code signature stays valid on Apple Silicon (the
@@ -15,7 +16,7 @@
 # Docs: https://storrito.com/documentation/cli/
 set -eu
 
-BASE="${STORRITO_DOWNLOADS_URL:-https://storrito.com/downloads/cli}"
+BASE="${STORRITO_DOWNLOADS_URL:-https://github.com/storrito/storrito-cli/releases}"
 VERSION="${STORRITO_CLI_VERSION:-}"
 INSTALL_DIR="${STORRITO_INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -50,11 +51,12 @@ platform="$platform_os-$platform_arch"
 file="storrito-$platform"
 
 if [ -z "$VERSION" ]; then
-  VERSION="$(curl -fsSL "$BASE/latest.txt" | tr -d '[:space:]')" || fail "could not read $BASE/latest.txt"
+  VERSION="$(curl -fsSL "$BASE/latest/download/latest.txt" | tr -d '[:space:]')" || fail "could not read $BASE/latest/download/latest.txt"
 fi
-[ -n "$VERSION" ] || fail "no version found at $BASE/latest.txt"
+[ -n "$VERSION" ] || fail "no version found at $BASE/latest/download/latest.txt"
+VERSION="${VERSION#v}"
 
-url="$BASE/$VERSION/$file"
+url="$BASE/download/v$VERSION/$file"
 tmp="$(mktemp -d 2>/dev/null || mktemp -d -t storrito)"
 trap 'rm -rf "$tmp"' EXIT
 

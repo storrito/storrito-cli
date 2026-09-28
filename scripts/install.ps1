@@ -4,8 +4,9 @@
 #
 # Puts storrito.exe into %LOCALAPPDATA%\Programs\storrito (or
 # $env:STORRITO_INSTALL_DIR) and adds that directory to the user PATH.
-# Environment variables: STORRITO_CLI_VERSION pins a version,
-# STORRITO_DOWNLOADS_URL points to another download host (tests).
+# Releases come from https://github.com/storrito/storrito-cli/releases.
+# Environment variables: STORRITO_CLI_VERSION pins a version (e.g. 0.2.0),
+# STORRITO_DOWNLOADS_URL points to another releases base URL (tests).
 # Docs: https://storrito.com/documentation/cli/
 #
 # This file stays pure ASCII, so that Windows PowerShell 5.1 reads it
@@ -14,7 +15,7 @@
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$Base = if ($env:STORRITO_DOWNLOADS_URL) { $env:STORRITO_DOWNLOADS_URL } else { 'https://storrito.com/downloads/cli' }
+$Base = if ($env:STORRITO_DOWNLOADS_URL) { $env:STORRITO_DOWNLOADS_URL } else { 'https://github.com/storrito/storrito-cli/releases' }
 $Version = $env:STORRITO_CLI_VERSION
 $InstallDir = if ($env:STORRITO_INSTALL_DIR) { $env:STORRITO_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\storrito' }
 
@@ -30,11 +31,12 @@ if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
 $File = 'storrito-windows-amd64.exe'
 
 if (-not $Version) {
-  $Version = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/latest.txt").Content.Trim()
+  $Version = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/latest/download/latest.txt").Content.Trim()
 }
-if (-not $Version) { throw "no version found at $Base/latest.txt" }
+if (-not $Version) { throw "no version found at $Base/latest/download/latest.txt" }
+$Version = $Version.TrimStart('v')
 
-$Url = "$Base/$Version/$File"
+$Url = "$Base/download/v$Version/$File"
 $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("storrito-install-" + [guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $Tmp | Out-Null
 try {

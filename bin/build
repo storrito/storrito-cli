@@ -9,8 +9,9 @@
 ;; concatenates runtime + jar into one self-contained executable per
 ;; platform (`cat bb storrito.jar > storrito`, babashka runs the appended
 ;; jar's -main when its executable is not named bb). Writes sha256 files and
-;; the manifest, and uploads everything to the public Tigris bucket
-;; storrito-downloads that storrito.com/downloads/cli/ serves.
+;; the manifest, and publishes everything as a GitHub release
+;; (https://github.com/storrito/storrito-cli/releases), which the install
+;; scripts and `storrito upgrade` download from.
 ;;
 ;; USAGE:
 ;;   bin/build [OPTIONS]
@@ -20,20 +21,18 @@
 ;;   --bb-version V       The babashka release to embed (default: pinned below)
 ;;   --platforms a,b      Only these platforms (default: all five)
 ;;   --skip-tests         Do not run `bb test` first
-;;   --upload             Upload dist/<version> and the manifest to Tigris
-;;                        (needs the tigris CLI logged in to the Storrito account)
+;;   --release            Publish dist/<version> as the GitHub release v<version>
+;;                        (needs `gh` logged in with write access; CI does this
+;;                        on a tag push, see .github/workflows/release.yml)
 ;;
 ;; EXAMPLES:
 ;;   bin/build --platforms linux-amd64            # a local build to try out
-;;   bin/build --version 0.2.0 --upload           # a release
+;;   bin/build --version 0.2.0 --release          # a release from a laptop
 ;;
 ;; OUTPUT:
 ;;   dist/<version>/storrito-<platform>[.exe] (+ .sha256)
 ;;   dist/<version>/latest.json and latest.txt
-;;
-;; --upload also uploads scripts/install.sh and scripts/install.ps1 to the
-;; bucket (cli/install.sh, cli/install.ps1), which storrito.com serves as
-;; /install.sh and /install.ps1.
+
 ;;
 ;; No code signing: the babashka runtime carries its own ad-hoc signature,
 ;; which stays valid with the jar appended (Apple Silicon runs it, verified
@@ -61,11 +60,12 @@
    "macos-aarch64" {:asset "macos-aarch64.tar.gz" :bin "bb"}
    "windows-amd64" {:asset "windows-amd64.zip" :bin "bb.exe" :suffix ".exe"}})
 
-(def downloads-url
-  "https://storrito.com/downloads/cli")
+(def repo
+  "storrito/storrito-cli")
 
-(def bucket
-  "t3://storrito-downloads/cli")
+(def downloads-url
+  "The download URL of a release asset, without the trailing /v<version>/<file>."
+  (str "https://github.com/" repo "/releases/download"))
 
 (def cli-dir
   ".")
@@ -159,7 +159,7 @@
     (let [digest (sha256 exe)]
       (spit (fs/file (fs/path dist (str file ".sha256")))
             (str digest "  " file "\n"))
-      {:url (str downloads-url "/" version "/" file)
+      {:url (str downloads-url "/v" version "/" file)
        :sha256 digest
        :size (fs/size exe)})))
 
@@ -191,26 +191,28 @@
       (println "Built" (str dist))
       dist)))
 
-(defn upload!
-  "Uploads the version directory, then the manifest, so that a client
-   never sees a manifest whose files are missing."
+(defn release!
+  "Publishes the version directory as the GitHub release `v<version>`:
+   the executables, their sha256 files, latest.json and latest.txt as
+   assets. `<releases>/latest/download/latest.txt` then redirects to the
+   newest release."
   [dist version]
-  (println "Uploading to" bucket)
-  (doseq [file (fs/list-dir dist)
-          :when (not (contains? #{"latest.json" "latest.txt"} (fs/file-name file)))]
-    (process/shell "tigris" "cp" (str file) (str bucket "/" version "/" (fs/file-name file))))
-  (process/shell "tigris" "cp" (str (fs/path dist "latest.json")) (str bucket "/latest.json"))
-  (process/shell "tigris" "cp" (str (fs/path dist "latest.txt")) (str bucket "/latest.txt"))
-  (process/shell "tigris" "cp" "scripts/install.sh" (str bucket "/install.sh"))
-  (process/shell "tigris" "cp" "scripts/install.ps1" (str bucket "/install.ps1"))
-  (println "Published" version "at" downloads-url))
+  (let [tag (str "v" version)]
+    (println "Publishing" tag "to" repo)
+    (apply process/shell
+           "gh" "release" "create" tag
+           "--repo" repo
+           "--title" (str "storrito " version)
+           "--generate-notes"
+           (map str (fs/list-dir dist)))
+    (println "Published" (str "https://github.com/" repo "/releases/tag/" tag))))
 
 (def cli-spec
   {:version {:desc "Set the CLI version before building"}
    :bb-version {:desc "The babashka release to embed" :default pinned-bb-version}
    :platforms {:desc "Comma-separated platforms" :default (str/join "," (keys platforms))}
    :skip-tests {:desc "Skip bb test" :coerce :boolean}
-   :upload {:desc "Upload to Tigris" :coerce :boolean}
+   :release {:desc "Publish as a GitHub release" :coerce :boolean}
    :help {:coerce :boolean}})
 
 (defn -main
@@ -232,8 +234,8 @@
                           :bb-version (:bb-version opts)
                           :platforms* platforms*
                           :skip-tests (:skip-tests opts)})]
-        (when (:upload opts)
-          (upload! dist version))))))
+        (when (:release opts)
+          (release! dist version))))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

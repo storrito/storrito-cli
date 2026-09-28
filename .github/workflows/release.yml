@@ -1,0 +1,33 @@
+name: Release
+
+# Pushing a tag v<version> publishes the GitHub release with the five
+# self-contained executables, their sha256 files, latest.json and
+# latest.txt. The tag must match the version in src/storrito/cli/version.clj.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.13.224
+      - name: Check that the tag matches the version
+        run: |
+          set -eu
+          version="$(bb -e '(print (second (re-find #"\(def version\r?\n  \"([^\"]+)\"\)" (slurp "src/storrito/cli/version.clj"))))')"
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match version.clj ($version)"; exit 1
+          fi
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bb bin/build --release

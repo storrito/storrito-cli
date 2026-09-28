@@ -32,7 +32,8 @@ Windows (PowerShell), no administrator rights needed:
 irm https://storrito.com/install.ps1 | iex
 ```
 
-`storrito upgrade` updates the installed executable.
+`storrito upgrade` updates the installed executable. Releases:
+https://github.com/storrito/storrito-cli/releases
 
 ## How it works
 
@@ -69,7 +70,7 @@ the parameters, 5 rate limited even after retries, 6 network.
 | `STORRITO_CONFIG_DIR` | The config directory. |
 | `STORRITO_API_BASE` | Base URL template for a dev environment, e.g. `http://ORG_UUID.localhost:8080/api/v1/`. |
 | `STORRITO_CATALOG_URL` | Where to download the catalog. |
-| `STORRITO_DOWNLOADS_URL` | Where `upgrade` and the installers look for releases. |
+| `STORRITO_DOWNLOADS_URL` | The releases base URL for `upgrade` and the installers (default `https://github.com/storrito/storrito-cli/releases`). |
 | `STORRITO_WORKOS_CLIENT_ID`, `STORRITO_WORKOS_API_BASE` | The WorkOS application (staging) and API. |
 | `STORRITO_NO_UPDATE_CHECK` | No daily update hint. |
 | `STORRITO_DEBUG` | Print stack traces on stderr. |
@@ -93,14 +94,17 @@ from the catalog), `catalog`, `auth` + `workos` + `config` (logins),
 ## Release
 
 ```
-bin/build --version 0.2.0 --upload
+bin/build --version 0.2.0          # bumps src/storrito/cli/version.clj, builds dist/0.2.0
+git commit -am "Release 0.2.0" && git tag v0.2.0 && git push --tags
 ```
 
-Runs the tests, builds the jar, downloads the pinned babashka release for
-every platform, assembles the executables, writes the sha256 files and
-`latest.json`, and uploads everything plus the install scripts to the
-download bucket behind `https://storrito.com/downloads/cli/`. See the
-header of `bin/build`.
+The tag triggers `.github/workflows/release.yml`: the tests, the jar,
+the pinned babashka release for every platform, the five executables,
+their sha256 files, `latest.json` and `latest.txt`, published as the
+GitHub release `v0.2.0`. `bin/build --release` does the same from a
+laptop with `gh` logged in. The install scripts are served by
+storrito.com from this repository's `scripts/` (the website depends on
+this repo via `deps.edn`).
 
 ## License
 

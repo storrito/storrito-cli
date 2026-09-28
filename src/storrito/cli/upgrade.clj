@@ -1,9 +1,10 @@
 (ns storrito.cli.upgrade
   "`storrito upgrade`: replaces the running executable with the latest
-   release from `https://storrito.com/downloads/cli/`.
+   GitHub release of https://github.com/storrito/storrito-cli.
 
-   `latest.json` names the version and, per platform, the URL, sha256
-   and size of the executable. The new file is downloaded next to the
+   Every release carries a `latest.json` asset that names the version
+   and, per platform, the URL, sha256 and size of the executable;
+   `<releases>/latest/download/latest.json` redirects to the newest one. The new file is downloaded next to the
    running one, verified, made executable, then moved into place: an
    atomic rename on Unix, where the running
    process keeps its old inode; on Windows the running exe is renamed
@@ -20,10 +21,12 @@
             [storrito.cli.output :as output]
             [storrito.cli.version :as version]))
 
-(defn downloads-url
+(defn releases-url
+  "The releases base URL; `$STORRITO_DOWNLOADS_URL` points the tests and
+   a fork elsewhere."
   []
   (or (config/env "STORRITO_DOWNLOADS_URL")
-      "https://storrito.com/downloads/cli"))
+      "https://github.com/storrito/storrito-cli/releases"))
 
 (defn platform
   "The platform name of the running executable, e.g. `linux-amd64`, or
@@ -65,7 +68,7 @@
 
 (defn fetch-manifest
   []
-  (let [url (str (downloads-url) "/latest.json")
+  (let [url (str (releases-url) "/latest/download/latest.json")
         response (http/request {:method :get
                                 :url url
                                 :headers {"Accept" "application/json"
@@ -199,7 +202,7 @@
   []
   (try
     (let [response (http/request-once {:method :get
-                                       :url (str (downloads-url) "/latest.txt")
+                                       :url (str (releases-url) "/latest/download/latest.txt")
                                        :headers {"User-Agent" "storrito-cli"}
                                        :timeout 2000})]
       (when (= 200 (:status response))

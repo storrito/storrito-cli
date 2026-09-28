@@ -63,8 +63,12 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           set -eu
-          cp dist/*/latest.txt dist/latest.txt
-          (cd dist && python3 -m http.server 18477 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          # The layout of GitHub releases: latest/download/<asset> and download/v<version>/<asset>
+          version="$(cat dist/*/latest.txt)"
+          mkdir -p serve/latest/download "serve/download/v$version"
+          cp dist/*/latest.txt serve/latest/download/
+          cp dist/*/* "serve/download/v$version/"
+          (cd serve && python3 -m http.server 18477 --bind 127.0.0.1 >/dev/null 2>&1 &)
           sleep 2
           STORRITO_DOWNLOADS_URL=http://127.0.0.1:18477 STORRITO_INSTALL_DIR="$HOME/storrito-bin" sh scripts/install.sh
           "$HOME/storrito-bin/storrito" version
@@ -72,8 +76,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item (Get-ChildItem dist\*\latest.txt).FullName dist\latest.txt
-          $server = Start-Process python -ArgumentList '-m','http.server','18477','--bind','127.0.0.1' -WorkingDirectory dist -PassThru
+          $version = (Get-Content (Get-ChildItem dist\*\latest.txt).FullName -Raw).Trim()
+          New-Item -ItemType Directory -Force -Path "serve\latest\download" | Out-Null
+          New-Item -ItemType Directory -Force -Path "serve\download\v$version" | Out-Null
+          Copy-Item (Get-ChildItem dist\*\latest.txt).FullName "serve\latest\download\latest.txt"
+          Copy-Item "dist\$version\*" "serve\download\v$version\"
+          $server = Start-Process python -ArgumentList '-m','http.server','18477','--bind','127.0.0.1' -WorkingDirectory serve -PassThru
           Start-Sleep -Seconds 3
           $env:STORRITO_DOWNLOADS_URL = 'http://127.0.0.1:18477'
           $env:STORRITO_INSTALL_DIR = Join-Path $env:USERPROFILE 'storrito-bin'

@@ -20,16 +20,16 @@
     (fn [{:keys [uri] :as request}]
       (let [base (str "http://127.0.0.1:" (:server-port request))]
         (cond
-          (= uri "/latest.json")
+          (= uri "/latest/download/latest.json")
           (fake/json-response 200 {:version version
-                                   :files {platform {:url (str base "/" version "/" file)
+                                   :files {platform {:url (str base "/download/v" version "/" file)
                                                      :sha256 (if bad-sha "00" digest)
                                                      :size (count (.getBytes ^String binary "UTF-8"))}}})
 
-          (= uri "/latest.txt")
+          (= uri "/latest/download/latest.txt")
           {:status 200 :body (str version "\n")}
 
-          (= uri (str "/" version "/" file))
+          (= uri (str "/download/v" version "/" file))
           {:status 200 :body binary}
 
           :else
