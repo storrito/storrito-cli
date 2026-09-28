@@ -34,7 +34,8 @@
       (is (= version/version (setup/managed-version)))
       (is (false? (:loggedIn result)))
       (is (str/includes? (:next result) "storrito login"))
-      (is (str/ends-with? (:skill result) "/skills/storrito/SKILL.md")))))
+      (is (= (str (setup/skill-file)) (:skill result))
+          "the path as the OS spells it, backslashes on Windows"))))
 
 (deftest setup-claude-logs-in-when-needed-and-reports-existing-logins
   (with-claude-dir
