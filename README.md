@@ -35,19 +35,30 @@ irm https://storrito.com/install.ps1 | iex
 `storrito upgrade` updates the installed executable. Releases:
 https://github.com/storrito/storrito-cli/releases
 
-## Claude Code
+## Coding agents
 
 ```
-storrito setup claude
+storrito setup claude    # Claude Code
+storrito setup codex     # Codex
+storrito setup agents    # both, with one login
 ```
 
 Installs the Storrito skill (`resources/storrito/SKILL.md`, shipped in
-the executable) into `~/.claude/skills/storrito/` and signs you in when
-no login is stored. From then on Claude Code knows when and how to use
-the CLI, for example "create a Storrito draft from story.html". The
-skill is refreshed by `storrito upgrade`; `--skill-only` skips the
-login, `--print` shows the skill, `--force` replaces a skill file the
-CLI did not write.
+the executable) into the agent's user skills directory and signs you in
+when no login is stored. From then on the agent knows when and how to
+use the CLI, for example "create a Storrito draft from story.html".
+
+- Claude Code reads `~/.claude/skills/storrito/` (`$CLAUDE_CONFIG_DIR`
+  replaces `~/.claude` when set).
+- Codex reads the shared Agent Skills directory
+  `~/.agents/skills/storrito/`. Codex also still scans the deprecated
+  `~/.codex/skills/`, but would list a skill present in both places
+  twice, so the CLI writes the shared directory only.
+
+The installed skills are refreshed by `storrito upgrade` (every start
+of a newer CLI rewrites them); `--skill-only` skips the login,
+`--print` shows the skill, `--force` replaces a skill file the CLI did
+not write.
 
 ## How it works
 

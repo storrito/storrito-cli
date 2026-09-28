@@ -158,7 +158,7 @@
     :doc "Replaces this executable with the latest release (--force reinstalls)."
     :run upgrade/upgrade}
    {:name "setup"
-    :doc "setup claude: installs the Storrito skill for Claude Code and checks the login."
+    :doc "setup claude|codex|agents: installs the Storrito skill for Claude Code, Codex or both, and checks the login."
     :run (fn [ctx]
            (setup/setup ctx
                         {:login-fn (fn [{:keys [flags]}]
