@@ -3,7 +3,7 @@
    release.")
 
 (def version
-  "0.1.1")
+  "0.2.0")
 
 (defn info
   "The version and the platform, as `storrito version` prints it."
