@@ -26,10 +26,13 @@
                     (config/windows?) ["rundll32" "url.dll,FileProtocolHandler" url]
                     (str/includes? (str/lower-case (System/getProperty "os.name" "")) "mac") ["open" url]
                     :else ["xdg-open" url])]
-      (process/shell {:out :discard
-                      :err :discard
-                      :continue true}
-                     (str/join " " (map #(str "\"" % "\"") command)))
+      ;; An argument vector, so that no character of the URL is
+      ;; interpreted by a shell.
+      (apply process/shell
+             {:out :discard
+              :err :discard
+              :continue true}
+             command)
       true)
     (catch Exception _
       false)))

@@ -78,3 +78,25 @@
                                                           :refreshToken "expired"
                                                           :expiresAt 1}))
         (is (= :not-logged-in (exit-of #(auth/resolve-auth {}))))))))
+
+(deftest parallel-invocations-refresh-once
+  (let [state (atom {})]
+    (fake/with-server [url (fake/workos-handler {:pending 0 :state state})]
+      (fake/with-config-dir {"STORRITO_WORKOS_API_BASE" url}
+        (config/write-credentials! (config/put-org-entry (config/read-credentials)
+                                                         fake/org-uuid
+                                                         {:kind "workos"
+                                                          :accessToken "stale"
+                                                          :refreshToken "refresh-1"
+                                                          :workosOrgId "org_01TEST"
+                                                          :expiresAt 1}))
+        (let [tokens (->> (repeatedly 4 #(future (:token (auth/resolve-auth {}))))
+                          (doall)
+                          (mapv deref))]
+          (is (= 1 (count (distinct tokens)))
+              "every invocation ends up with the same fresh token")
+          (is (not= "stale" (first tokens)))
+          (is (= 1 (count (:requests @state)))
+              "the lock serializes the refresh, the others re-read the file")
+          (is (= "refresh-1-rotated"
+                 (:refreshToken (config/org-entry (config/read-credentials) fake/org-uuid)))))))))

@@ -205,6 +205,9 @@
                         {:exit :rate-limited
                          :status status
                          :retryable true
+                         :hint (if-let [retry-after (get-in response [:headers "retry-after"])]
+                                 (str "Retry after " retry-after " seconds.")
+                                 "Retry in a minute; the default quota is 60 requests per minute per organization.")
                          :details body})
       (output/error (str procedure-name ": " message)
                     {:exit :error

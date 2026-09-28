@@ -165,8 +165,11 @@
                            :details body}))))
 
 (defn decode-jwt-claims
-  "The claims of a JWT, decoded without verification. The API verifies
-   the token; the CLI only reads the organization and the expiry."
+  "The claims of a JWT, decoded without verification. Only for
+   bookkeeping: the organization UUID (the API base URL), the expiry (when
+   to refresh) and the e-mail (`storrito status`). Nothing here is an
+   authorization decision; the API verifies the signature of every
+   token it receives."
   [token]
   (let [[_ payload] (str/split token #"\." 3)]
     (json/parse-string

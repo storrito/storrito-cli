@@ -148,13 +148,15 @@
   (config-file "credentials.lock"))
 
 (def lock-stale-ms
-  "A lock older than this is left over from a crashed process."
-  30000)
+  "A lock older than this is left over from a crashed process. A token
+   refresh takes a second or two. Shorter than the lock timeout, so that
+   a waiting invocation removes a stale lock instead of giving up."
+  10000)
 
 (defn with-lock*
   "Runs `f` while holding the credentials lock: an exclusively created
    lock file, retried for up to `timeout-ms`. Stale locks are removed."
-  [f {:keys [timeout-ms] :or {timeout-ms 10000}}]
+  [f {:keys [timeout-ms] :or {timeout-ms 20000}}]
   (ensure-config-dir!)
   (let [lock (fs/path (lock-file))
         deadline (+ (System/currentTimeMillis) timeout-ms)]
@@ -173,7 +175,11 @@
               (fs/delete-if-exists lock)))
 
           (> (- (System/currentTimeMillis)
-                (.toMillis (fs/last-modified-time lock)))
+                (try
+                  (.toMillis (fs/last-modified-time lock))
+                  (catch Exception _
+                    ;; The holder released it meanwhile: not stale, retry.
+                    (System/currentTimeMillis))))
              lock-stale-ms)
           (do (fs/delete-if-exists lock)
               (recur))

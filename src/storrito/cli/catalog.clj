@@ -32,11 +32,13 @@
   (config/read-json-file (cache-file)))
 
 (defn cache-age-ms
+  "The age of the cached catalog, `Long/MAX_VALUE` without a cache (or
+   when it vanished between the check and the read)."
   []
-  (let [file (cache-file)]
-    (if (fs/exists? file)
-      (- (System/currentTimeMillis)
-         (.toMillis (fs/last-modified-time file)))
+  (try
+    (- (System/currentTimeMillis)
+       (.toMillis (fs/last-modified-time (cache-file))))
+    (catch Exception _
       Long/MAX_VALUE)))
 
 (defn store!
