@@ -40,7 +40,7 @@
   (fake/with-config-dir {"STORRITO_CATALOG_URL" "http://127.0.0.1:9/"}
     (let [{:keys [exit json]} (run "--version")]
       (is (= 0 exit))
-      (is (= "0.2.0" (:version json))))
+      (is (= "0.3.0" (:version json))))
     (let [{:keys [exit out]} (run)]
       (is (= 0 exit))
       (is (str/includes? out "Commands:"))
