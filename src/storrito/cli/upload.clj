@@ -35,13 +35,29 @@
                           {:exit :usage
                            :hint "Pass --content-type, e.g. --content-type video/mp4"})))
 
+(def put-timeout-min-ms
+  "The timeout of the PUT for a small file."
+  (* 30 60 1000))
+
+(def put-bytes-per-second
+  "The slowest uplink the PUT's timeout allows for: 500 KB/s, so a 5 GB
+   temp-blob (the maximum) gets about 3 hours."
+  500000)
+
+(defn put-timeout-ms
+  "The timeout of the PUT of `size` bytes: 30 minutes, or longer for a
+   file that needs it on a slow uplink."
+  [size]
+  (max put-timeout-min-ms
+       (* 1000 (quot size put-bytes-per-second))))
+
 (defn put-file!
   [upload-url path content-type]
   (let [response (http/request {:method :put
                                 :url upload-url
                                 :headers {"Content-Type" content-type}
                                 :body (fs/file path)
-                                :timeout (* 30 60 1000)}
+                                :timeout (put-timeout-ms (fs/size path))}
                                {:retries 2})]
     (when-not (<= 200 (:status response) 299)
       (output/throw-error (str "The upload failed with HTTP " (:status response))

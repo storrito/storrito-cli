@@ -215,13 +215,28 @@
                      :retryable (>= status 500)
                      :details body}))))
 
+(def request-timeouts
+  "The read timeout per procedure, in milliseconds, where the default of
+   `http/json-request` (2 minutes) is too short. `upload-youtube-video`
+   answers once the publishing service has fetched the video, minutes
+   for a file of some gigabytes; the server gives up on the fetch after
+   15 minutes, so the client waits a minute longer to read that answer
+   instead of timing out first."
+  {"upload-youtube-video" (* 16 60 1000)})
+
+(defn procedure-request
+  "The request of the procedure call."
+  [{:keys [base-url token]} procedure-name params]
+  (http/json-request (str base-url procedure-name)
+                     token
+                     params
+                     {:timeout (get request-timeouts procedure-name)}))
+
 (defn invoke
   "Calls the procedure and returns the parsed response, or throws the
    CLI error."
-  [{:keys [base-url token]} procedure-name params & [http-opts]]
-  (let [response (http/request (http/json-request (str base-url procedure-name)
-                                                  token
-                                                  params)
+  [api procedure-name params & [http-opts]]
+  (let [response (http/request (procedure-request api procedure-name params)
                                http-opts)]
     (if (= 200 (:status response))
       (http/parse-json-body response)

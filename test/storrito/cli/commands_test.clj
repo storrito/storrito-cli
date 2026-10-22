@@ -119,3 +119,12 @@
               data (output/error-data e)]
           (is (= :error (:exit data)))
           (is (true? (:retryable data))))))))
+
+(deftest procedure-request-timeout
+  (let [api {:base-url "https://x/api/v1/" :token "tok"}]
+    (is (= 120000 (:timeout (commands/procedure-request api "status-example" {})))
+        "the default of json-request")
+    (is (= (* 16 60 1000) (:timeout (commands/procedure-request api "upload-youtube-video" {})))
+        "the server fetches the video first, up to 15 minutes")
+    (is (= "https://x/api/v1/upload-youtube-video"
+           (:url (commands/procedure-request api "upload-youtube-video" {}))))))

@@ -14,6 +14,7 @@
                                  storrito.cli.catalog-test
                                  storrito.cli.commands-test
                                  storrito.cli.upgrade-test
+                                 storrito.cli.upload-test
                                  storrito.cli.setup-test
                                  storrito.cli.main-test]]
                 (doseq [n namespaces]

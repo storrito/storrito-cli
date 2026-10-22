@@ -116,6 +116,11 @@ Namespaces: `storrito.cli.main` (dispatch), `commands` (procedure commands
 from the catalog), `catalog`, `auth` + `workos` + `config` (logins),
 `http` (retries), `output` (JSON, exit codes), `upload`, `upgrade`.
 
+A procedure call waits up to 2 minutes for the answer, `upload-youtube-video`
+up to 16 minutes (the server fetches the video first, see
+`commands/request-timeouts`); `storrito upload` gives a large file the time
+its size needs.
+
 ## Release
 
 ```
